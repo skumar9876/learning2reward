@@ -51,8 +51,9 @@ b_fc2 = bias_variable([100])
 h_fc2 = tf.nn.relu(tf.matmul(sentence_vec, 100) + b_fc2)
 
 #Concatenate fc layers for image and language inputs -> should be a 1x200 vector
-h_fc_concatenated = tf.concat(1, [h_fc1, h_fc2]) #Is 1 the correct dimension?
+h_fc_concatenated = tf.concat(1, [h_fc1, h_fc2]) #Is 1 the correct dimension to concatenate along?
 
+#Dropout according to input probability
 keep_prob = tf.placeholder(tf.float32)
 h_fc_concatendated = tf.nn.dropout(h_fc_concatenated, keep_prob)
 
@@ -60,4 +61,10 @@ h_fc_concatendated = tf.nn.dropout(h_fc_concatenated, keep_prob)
 W_deconv1 = weight_variable([5, 1, 1, 1])
 h_deconv1 = tf.nn.conv2d_transpose(h_fc_concatenated, filter=W_deconv1, output_shape=[1,28,28,1], strides=[1,1,1,1], padding='SAME')
 
+#Should I include another step between the deconvolution and outputting the predicted reward map?
+
 rewards_pred = tf.reshape(h_deconv1, [-1, 784]) #These are the predicted rewards
+
+
+#Need to make loss function here: should I use cross entropy loss or squared difference loss 
+#between the predicted rewards and the true rewards?
