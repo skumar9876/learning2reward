@@ -135,7 +135,7 @@ def is_overlap(room1, room2):
 
 if __name__ == "__main__":
     args = sys.argv
-    if len(args) == 0:
+    if len(args) == 1:
         print "Usage: python generate_data.py [number] [file_name]"
     num = int(args[1])
     file_name = args[2]
@@ -152,5 +152,3 @@ if __name__ == "__main__":
     #   file = pickle.load(fp)
     # for grid, sentence, reward in file:
     #   do stuff
-
-
