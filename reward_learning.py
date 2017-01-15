@@ -1,12 +1,13 @@
 import tensorflow as tf 
 sess = tf.InteractiveSession()
 
-#Input is a 28x28 image
-#Output is a 28x28 reward map
+#Input is a 28x28 image (flattened to a 1x784 vector)
+#Output is a 28x28 reward map (flattened to a 1x784 vector)
 
 state = tf.placeholder(tf.float32, shape=[None, 784])
 sentence_vec = tf.placeholder(tf.float32, shape=[None, 10])
 
+#Maybe change to one-hot vector for each location on the grid.
 rewards_actual = tf.placeholder(tf.float32, shape=[None, 784])
 
 def weight_variable(shape):
@@ -30,14 +31,14 @@ b_conv1 = bias_variable([32])
 
 state_image = tf.reshape(state_image, [-1,28,28,1])
 h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
-h_pool1 = max_pool_2x2(h_conv1)
+h_pool1 = h_conv1 #max_pool_2x2(h_conv1) #No max pooling for now
 
 #Second convolutional layer
 W_conv2 = weight_variable([5, 5, 32, 64])
 b_conv2 = bias_variable([64])
 
 h_conv2 = tf.nn.relu(conv2d(h_pool2, W_conv2) + b_conv2)
-h_pool2 = max_pool_2x2(h_conv2)
+h_pool2 = h_conv2 #max_pool_2x2(h_conv2) #No max pooling for now
 
 #Fully connected layer
 W_fc1 = weight_variable([7 * 7 * 64, 100])
@@ -65,6 +66,8 @@ h_deconv1 = tf.nn.conv2d_transpose(h_fc_concatenated, filter=W_deconv1, output_s
 
 rewards_pred = tf.reshape(h_deconv1, [-1, 784]) #These are the predicted rewards
 
-
-#Need to make loss function here: should I use cross entropy loss or squared difference loss 
-#between the predicted rewards and the true rewards?
+cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(rewards_pred, rewards_actual))
+train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+correct_prediction = tf.equal(tf.argmax(rewards_pred, 1), tf.argmax(rewards_actual, 1))
+accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+sess.run(tf.initialize_all_variables())
