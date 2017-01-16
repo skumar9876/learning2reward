@@ -19,9 +19,13 @@ def generate_reward(grid, sentence):
     reward = []
     for num in grid:
         if num in positive:
-            reward.append(1)
+            #reward.append(1)
+            reward.append([1,0])
         else:
-            reward.append(-.01)
+            #reward.append(-.01)
+            reward.append([0,1])
+
+    reward = np.array(reward)
     return reward
 
 '''
@@ -137,6 +141,7 @@ if __name__ == "__main__":
     args = sys.argv
     if len(args) == 1:
         print "Usage: python generate_data.py [number] [file_name]"
+        sys.exit()
     num = int(args[1])
     file_name = args[2]
     possible = generate_sentences()
