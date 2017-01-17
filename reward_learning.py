@@ -66,6 +66,7 @@ def max_pool_2x2(x):
 '''
 Network architecture.
 '''
+
 sess = tf.InteractiveSession()
 
 # Input is a 28x28 image (flattened to a 1x784 vector)
@@ -91,7 +92,6 @@ b_conv2 = bias_variable([64])
 
 h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
 h_pool2 = h_conv2  # max_pool_2x2(h_conv2) #No max pooling for now
-
 
 # Fully connected layer
 W_fc1 = weight_variable([28 * 28 * 64, 392])
@@ -120,7 +120,7 @@ size_of_batch = tf.shape(h_fc_concatenated)[0]
 
 # Deconvolution step
 W_deconv1 = weight_variable([5, 5, 2, 1])
-output_shape = tf.pack([size_of_batch, 28, 28, 2])
+output_shape = [size_of_batch, 28, 28, 2]
 h_deconv1 = tf.nn.conv2d_transpose(h_fc_concatenated, filter=W_deconv1, output_shape=output_shape, strides=[1, 1, 1, 1], padding='SAME')
 
 # Should I include another step between the deconvolution and outputting
@@ -144,15 +144,13 @@ cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(rewards_pred, rew
 
 train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 
-
 # HERE: Having trouble measuring accuracy correctly.
-correct_prediction = [tf.equal(
-    tf.argmax(rewards_pred[i][j], 1), rewards_actual[i][j]) for i in xrange(50) for j in xrange(784)]
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+#correct_prediction = [tf.equal(
+#    tf.argmax(rewards_pred[i][j], 1), rewards_actual[i][j]) for i in xrange(size_of_batch) for j in xrange(784)]
+#accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
 
 sess.run(tf.initialize_all_variables())
-
-
 
 
 '''
@@ -165,6 +163,7 @@ test_grids, test_sentences, test_rewards = read_data('test')
 # Batch size used in training.
 batch_size = 50
 
+
 for i in range(2000):
     grids_batch = next_batch(train_grids, i, batch_size)
     sentences_batch = next_batch(train_sentences, i, batch_size)
@@ -176,10 +175,12 @@ for i in range(2000):
     train_step.run(feed_dict={state: grids_batch, sentence_vec: sentences_batch, rewards_actual: rewards_batch, keep_prob: 1})
 
     #Commented this out since having trouble measuring accuracy correctly
-    if i%2 == 0:
-        train_accuracy = accuracy.eval(feed_dict={
-            state: grids_batch, sentence_vec: sentences_batch, rewards_actual: rewards_batch, keep_prob: 1.0})
-        print("step %d, training accuracy %g"%(i, train_accuracy))
+    #if i%100 == 0:
+    #    train_accuracy = accuracy.eval(feed_dict={
+    #        state: grids_batch, sentence_vec: sentences_batch, rewards_actual: rewards_batch, keep_prob: 1.0})
+    #    print("step %d, training accuracy %g"%(i, train_accuracy))
+    if i%100 == 0:
+        print i
 
 
 
