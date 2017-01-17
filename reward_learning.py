@@ -64,7 +64,7 @@ def max_pool_2x2(x):
 
 
 '''
-Network architecture. bb.
+Network architecture.
 '''
 sess = tf.InteractiveSession()
 
@@ -152,6 +152,12 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
 sess.run(tf.initialize_all_variables())
 
+
+
+
+'''
+Training and Testing loops.
+'''
 
 train_grids, train_sentences, train_rewards = read_data('train')
 test_grids, test_sentences, test_rewards = read_data('test')
