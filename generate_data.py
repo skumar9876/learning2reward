@@ -20,10 +20,12 @@ def generate_reward(grid, sentence):
     for num in grid:
         if num in positive:
             #reward.append(1)
-            reward.append([1,0])
+            #reward.append([1,0])
+            reward.append(0)
         else:
             #reward.append(-.01)
-            reward.append([0,1])
+            #reward.append([0,1])
+            reward.append(1)
 
     reward = np.array(reward)
     return reward
