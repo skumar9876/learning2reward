@@ -141,7 +141,10 @@ rewards_pred = tf.reshape(h_deconv1, [-1, 784, 2])
 # E.g. (1,0) --> reward class 0, (0,1) --> reward class 1
 cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rewards_pred, labels=rewards_actual)
 
-print cross_entropy.get_shape()
+# Weight the cross entropy loss more heavily in locations of goal reward (x2)
+loss_weighting = tf.multiply(tf.cast(rewards_actual, tf.float32), cross_entropy)
+cross_entropy = tf.add(loss_weighting, cross_entropy)
+
 
 train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 
@@ -170,9 +173,6 @@ correct_prediction = tf.equal(rewards_pred_flat, rewards_actual)
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
 
-
-
-
 sess.run(tf.global_variables_initializer())
 
 
@@ -188,7 +188,7 @@ test_grids, test_sentences, test_rewards = read_data('test')
 batch_size = 50
 
 
-for i in range(10000):
+for i in range(100):
     grids_batch = next_batch(train_grids, i, batch_size)
     sentences_batch = next_batch(train_sentences, i, batch_size)
     rewards_batch = next_batch(train_rewards, i, batch_size)
