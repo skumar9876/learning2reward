@@ -21,11 +21,11 @@ def generate_reward(grid, sentence):
         if num in positive:
             #reward.append(1)
             #reward.append([1,0])
-            reward.append(0)
+            reward.append(1)
         else:
             #reward.append(-.01)
             #reward.append([0,1])
-            reward.append(1)
+            reward.append(0)
 
     reward = np.array(reward)
     return reward

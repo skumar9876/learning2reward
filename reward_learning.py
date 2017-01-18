@@ -62,7 +62,6 @@ def max_pool_2x2(x):
     return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
                           strides=[1, 2, 2, 1], padding='SAME')
 
-
 '''
 Network architecture.
 '''
@@ -140,7 +139,9 @@ rewards_pred = tf.reshape(h_deconv1, [-1, 784, 2])
 # Rewards actual has shape batch_sizex784 instead of batch_size x 784 x 2
 # Actual reward map contains the indices of the correct reward for each row of the predicted reward output of size batch_sizex784x2
 # E.g. (1,0) --> reward class 0, (0,1) --> reward class 1
-cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(rewards_pred, rewards_actual)
+cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rewards_pred, labels=rewards_actual)
+
+print cross_entropy.get_shape()
 
 train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 
@@ -149,8 +150,31 @@ train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 #    tf.argmax(rewards_pred[i][j], 1), rewards_actual[i][j]) for i in xrange(size_of_batch) for j in xrange(784)]
 #accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
+rewards_pred_flat = tf.argmax(rewards_pred, 2)
 
-sess.run(tf.initialize_all_variables())
+rewards_pred_flat_bool = tf.cast(rewards_pred_flat, tf.int64)
+rewards_actual_bool = tf.cast(rewards_actual, tf.int64)
+
+false_positives, fp_update_op = tf.contrib.metrics.streaming_false_positives(rewards_pred_flat_bool, rewards_actual_bool, weights=None, 
+    metrics_collections=None, updates_collections=None, name=None)
+
+false_negatives, fn_update_op = tf.contrib.metrics.streaming_false_negatives(rewards_pred_flat_bool, rewards_actual_bool, weights=None, 
+    metrics_collections=None, updates_collections=None, name=None)
+
+true_positives = tf.reduce_sum(rewards_actual_bool)
+
+sess.run(tf.local_variables_initializer())
+
+
+correct_prediction = tf.equal(rewards_pred_flat, rewards_actual)
+accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+
+
+
+
+sess.run(tf.global_variables_initializer())
+
 
 
 '''
@@ -164,7 +188,7 @@ test_grids, test_sentences, test_rewards = read_data('test')
 batch_size = 50
 
 
-for i in range(2000):
+for i in range(10000):
     grids_batch = next_batch(train_grids, i, batch_size)
     sentences_batch = next_batch(train_sentences, i, batch_size)
     rewards_batch = next_batch(train_rewards, i, batch_size)
@@ -172,21 +196,46 @@ for i in range(2000):
     #print np.shape(grids_batch)
     #print np.shape(sentences_batch)
 
-    train_step.run(feed_dict={state: grids_batch, sentence_vec: sentences_batch, rewards_actual: rewards_batch, keep_prob: 1})
+    train_step.run(feed_dict={state: grids_batch, sentence_vec: sentences_batch, rewards_actual: rewards_batch, keep_prob: 0.5})
 
-    #Commented this out since having trouble measuring accuracy correctly
-    #if i%100 == 0:
-    #    train_accuracy = accuracy.eval(feed_dict={
-    #        state: grids_batch, sentence_vec: sentences_batch, rewards_actual: rewards_batch, keep_prob: 1.0})
-    #    print("step %d, training accuracy %g"%(i, train_accuracy))
+    #Print out training step number and accuracy
     if i%100 == 0:
-        print i
+        train_accuracy = accuracy.eval(feed_dict={
+            state: grids_batch, sentence_vec: sentences_batch, rewards_actual: rewards_batch, keep_prob: 0.5})
+
+        print("step %d, training accuracy %g"%(i, train_accuracy))
 
 
 
 saver = tf.train.Saver()
 saver.save(sess, 'trained-model')
     
+'''
+Print the results on the test data.
+'''
+test_accuracy = accuracy.eval(feed_dict={
+    state: test_grids, sentence_vec: test_sentences, rewards_actual: test_rewards, keep_prob: 1.0})
+fp_update_op.eval(feed_dict={
+    state: test_grids, sentence_vec: test_sentences, rewards_actual: test_rewards, keep_prob: 1.0})
+fn_update_op.eval(feed_dict={
+    state: test_grids, sentence_vec: test_sentences, rewards_actual: test_rewards, keep_prob: 1.0})
+total_positives = true_positives.eval(feed_dict={
+    state: test_grids, sentence_vec: test_sentences, rewards_actual: test_rewards, keep_prob: 1.0})
+total_negatives = test_grids.size - total_positives
 
-#print("test accuracy: %g"%accuracy.eval(feed_dict={
-#    x: mnist.test.images[0], y_: mnist.test.labels[0], keep_prob: 1.0}))
+num_false_positives = false_positives.eval()
+num_false_negatives = false_negatives.eval()
+
+print(num_false_positives)
+print(num_false_negatives)
+
+fp_rate_test = float(num_false_positives) / total_negatives
+fn_rate_test = float(num_false_negatives) / total_positives
+
+
+print ""
+print ""
+print ""
+print("test accuracy %g"%(test_accuracy))
+print("false positive rate %f"%(fp_rate_test))
+print("false negative rate %f"%(fn_rate_test))

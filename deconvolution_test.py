@@ -18,4 +18,12 @@ output = tf.constant(0.1, shape=output_shape)
 expected_l = tf.nn.conv2d(output, w, strides=strides, padding='SAME')
 print expected_l.get_shape()
 
+
+a = tf.constant(0.1, shape=[2,2])
+b = tf.constant(0.1, shape=[2,2])
+isequal = tf.equal(a, b)
+isequal_float = tf.cast(isequal, tf.float32)
+
+print sess.run(isequal)
+print sess.run(isequal_float)
 #print sess.run(h1)
