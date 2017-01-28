@@ -1,6 +1,9 @@
 import tensorflow as tf
 import numpy as np
 import pickle
+from PIL import Image
+from random import randint
+from matplotlib import cm
 
 '''
 Data reading function.
@@ -39,6 +42,30 @@ def next_batch(data, number, batch_size):
         returned_data = np.concatenate((returned_data, data2), axis=0)
 
     return returned_data
+
+'''
+Visualization of results.
+'''
+def visualize_results(reward_actual, reward_pred, i, save_string):
+    reward_actual = np.array(reward_actual)
+    reward_actual = reward_actual.reshape((28, 28))
+
+    reward_pred = np.array(reward_pred)
+    reward_pred = reward_pred.reshape((28,28))
+
+
+    mask = np.ones((28,28))
+    reward_actual = mask - reward_actual
+    reward_pred = mask - reward_pred
+
+
+    im1 = Image.fromarray(np.uint8(cm.gist_earth(reward_actual)*255))
+    im1 = im1.resize((200,200), Image.ANTIALIAS)
+    im1.save(save_string + "_actual_" + str(i), 'JPEG')
+    
+    im2 = Image.fromarray(np.uint8(cm.gist_earth(reward_pred)*255))
+    im2 = im2.resize((200,200), Image.ANTIALIAS)
+    im2.save(save_string +"_pred_" + str(i), 'JPEG')
 
 
 '''
@@ -141,9 +168,11 @@ rewards_pred = tf.reshape(h_deconv1, [-1, 784, 2])
 # E.g. (1,0) --> reward class 0, (0,1) --> reward class 1
 cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rewards_pred, labels=rewards_actual)
 
-# Weight the cross entropy loss more heavily in locations of goal reward (x2)
-loss_weighting = tf.multiply(tf.cast(rewards_actual, tf.float32), cross_entropy)
-cross_entropy = tf.add(loss_weighting, cross_entropy)
+# Weight the cross entropy loss more heavily in locations of goal reward (x392)
+# COMMENTED OUT
+# loss_weighting = tf.multiply(tf.cast(rewards_actual, tf.float32), cross_entropy)
+# loss_weighting = tf.scalar_mul(391, loss_weighting)
+# cross_entropy = tf.add(loss_weighting, cross_entropy)
 
 
 train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
@@ -187,8 +216,9 @@ test_grids, test_sentences, test_rewards = read_data('test')
 # Batch size used in training.
 batch_size = 50
 
-
-for i in range(100):
+steps = []
+accuracy_arr = []
+for i in range(1000):
     grids_batch = next_batch(train_grids, i, batch_size)
     sentences_batch = next_batch(train_sentences, i, batch_size)
     rewards_batch = next_batch(train_rewards, i, batch_size)
@@ -204,11 +234,22 @@ for i in range(100):
             state: grids_batch, sentence_vec: sentences_batch, rewards_actual: rewards_batch, keep_prob: 0.5})
 
         print("step %d, training accuracy %g"%(i, train_accuracy))
+        steps.append(i)
+        accuracy_arr.append(train_accuracy)
+
+'''
+Plot the training accuracy.
+'''
+import matplotlib.pyplot as plt
+plt.plot(steps, accuracy_arr)
+plt.xlabel('Iteration')
+plt.ylabel('Accuracy')
+plt.savefig('train_results.png')
 
 
 
-saver = tf.train.Saver()
-saver.save(sess, 'trained-model')
+#saver = tf.train.Saver()
+#saver.save(sess, 'trained-model')
     
 '''
 Print the results on the test data.
@@ -226,8 +267,8 @@ total_negatives = test_grids.size - total_positives
 num_false_positives = false_positives.eval()
 num_false_negatives = false_negatives.eval()
 
-print(num_false_positives)
-print(num_false_negatives)
+#print(num_false_positives)
+#print(num_false_negatives)
 
 fp_rate_test = float(num_false_positives) / total_negatives
 fn_rate_test = float(num_false_negatives) / total_positives
@@ -239,3 +280,16 @@ print ""
 print("test accuracy %g"%(test_accuracy))
 print("false positive rate %f"%(fp_rate_test))
 print("false negative rate %f"%(fn_rate_test))
+
+for i in xrange(10):
+
+    j = randint(0, len(test_rewards))
+
+    grid = test_grids[j].reshape((1, 784))
+    sentence = test_sentences[j].reshape((1, 4))
+    actual_reward = test_rewards[j].reshape((1, 784))
+
+    predicted_reward = rewards_pred_flat.eval(feed_dict={
+        state: grid, sentence_vec: sentence, rewards_actual: actual_reward, keep_prob: 1.0})
+
+    visualize_results(actual_reward, predicted_reward, i, "exp2/reward")
