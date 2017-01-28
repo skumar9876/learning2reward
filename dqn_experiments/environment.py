@@ -47,12 +47,12 @@ class GridWorld():
         :rtype numpy array
         """
 
-        randx = random.randint(0, len(self.original_board[0]))
-        randy = random.randint(0, len(self.original_board))
+        randx = random.randint(0, len(self.original_board[0]) - 1)
+        randy = random.randint(0, len(self.original_board) - 1)
 
         while self.original_board[randx][randy] == 60:
-            randy = random.randint(0, len(self.original_board))
-            randx = random.randint(0, len(self.original_board[0]))
+            randy = random.randint(0, len(self.original_board) - 1)
+            randx = random.randint(0, len(self.original_board[0]) - 1)
 
         self.state = self.original_board
         self.state[randy][randx] = 10
@@ -95,17 +95,17 @@ class GridWorld():
         elif action == 3:
             new_x -= 1
 
-        self.state[self.y][self.x] = original_board[self.y][self.x]
+        self.state[self.y][self.x] = self.original_board[self.y][self.x]
 
-        if 0 <= new_y <= len(self.original_board) and
-        0 <= new_x <= len(self.original_board[0]) and
+        if 0 <= new_y < len(self.original_board) and \
+        0 <= new_x < len(self.original_board[0]) and \
         self.original_board[new_y][new_x] != 60:
             self.x = new_x
             self.y = new_y
 
         self.state[self.y][self.x] = 10
 
-        return self.state, reward(), isTerminal()
+        return self.state, self.reward(), self.isTerminal()
 
 
     def isTerminal(self):
@@ -114,8 +114,6 @@ class GridWorld():
         returns whether or not the agent is in
         a terminal state.
 
-        :param state: a numpy array of the current image
-        :param sentence: a numpy array of the sentence instruction
         :returns: whether or not current state is a terminal state
         :rtype: boolean
         """
@@ -123,7 +121,6 @@ class GridWorld():
 
     def reward(self):
         """
-        For a given action,
         returns: the reward the agent gets for being in
         the current state and taking the selected action.
 
@@ -131,7 +128,7 @@ class GridWorld():
         :rtype float
         """
 
-        if isTerminal():
+        if self.isTerminal():
             return 1
         else:
             return -.01

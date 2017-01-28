@@ -5,6 +5,9 @@ import os
 import random
 import sys
 import tensorflow as tf
+import environment
+from collections import namedtuple
+import plotting
 
 '''
 Network definition functions.
@@ -46,7 +49,7 @@ class Estimator():
                 summary_dir = os.path.join(summaries_dir, "summaries_{}".format(scope))
                 if not os.path.exists(summary_dir):
                     os.makedirs(summary_dir)
-                self.summary_writer = tf.train.SummaryWriter(summary_dir)
+                self.summary_writer = tf.summary.FileWriter(summary_dir)
 
     def _build_model(self):
         """
@@ -55,9 +58,11 @@ class Estimator():
 
         # Placeholders for our input
         # State input is a 20x20 image
-        self.state_pl = tf.placeholder(shape=[None, 400], dtype=tf.uint8, name="image")
+        self.state_pl = tf.placeholder(shape=[None, 20, 20], dtype=tf.uint8, name="image")
+        state = tf.reshape(self.state_pl, [-1, 400])
         # Sentence input is a 4x1 vector
-        self.sentence_pl = tf.placeholder(tf.float32, shape=[None, 4], name="sentence")
+        self.sentence_pl = tf.placeholder(tf.float32, shape=[None, 3], name="sentence")
+
 
         # The TD target value
         self.y_pl = tf.placeholder(shape=[None], dtype=tf.float32, name="y")
@@ -65,7 +70,7 @@ class Estimator():
         self.actions_pl = tf.placeholder(shape=[None], dtype=tf.int32, name="actions")
 
 
-        state = tf.to_float(self.state_pl) / 255.0 # Is this step needed? - normalize pixel values to be between 0 and 1.
+        state = tf.to_float(state) / 255.0 # Is this step needed? - normalize pixel values to be between 0 and 1.
         batch_size = tf.shape(self.state_pl)[0]
 
         # First convolutional layer
@@ -90,7 +95,7 @@ class Estimator():
         h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
 
         # Fully connected layer for the language vector
-        W_fc2 = weight_variable([4, 50])
+        W_fc2 = weight_variable([3, 50])
         b_fc2 = bias_variable([50])
         h_fc2 = tf.nn.relu(tf.matmul(self.sentence_pl, W_fc2) + b_fc2)
 
@@ -122,11 +127,11 @@ class Estimator():
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.contrib.framework.get_global_step())
 
         # Summaries for Tensorboard
-        self.summaries = tf.merge_summary([
-            tf.scalar_summary("loss", self.loss),
-            tf.histogram_summary("loss_hist", self.losses),
-            tf.histogram_summary("q_values_hist", self.predictions),
-            tf.scalar_summary("max_q_value", tf.reduce_max(self.predictions))
+        self.summaries = tf.summary.merge([
+            tf.summary.scalar("loss", self.loss),
+            tf.summary.histogram("loss_hist", self.losses),
+            tf.summary.histogram("q_values_hist", self.predictions),
+            tf.summary.scalar("max_q_value", tf.reduce_max(self.predictions))
         ])
 
 
@@ -141,9 +146,9 @@ class Estimator():
           Tensor of shape [batch_size, NUM_VALID_ACTIONS] containing the estimated 
           action values.
         """
-        return sess.run(self.predictions, { self.X_pl: s, self.sentence_pl: sentence_vec })
+        return sess.run(self.predictions, { self.state_pl: s, self.sentence_pl: sentence_vec })
 
-    def update(self, sess, s, a, y):
+    def update(self, sess, s, a, y, sentence_vec):
         """
         Updates the estimator towards the given targets.
         Args:
@@ -154,7 +159,7 @@ class Estimator():
         Returns:
           The calculated loss on the batch.
         """
-        feed_dict = { self.X_pl: s, self.y_pl: y, self.actions_pl: a }
+        feed_dict = { self.state_pl: s, self.y_pl: y, self.actions_pl: a, self.sentence_pl: sentence_vec}
         summaries, global_step, _, loss = sess.run(
             [self.summaries, tf.contrib.framework.get_global_step(), self.train_op, self.loss],
             feed_dict)
@@ -183,7 +188,7 @@ def copy_model_parameters(sess, estimator1, estimator2):
     sess.run(update_ops)
 
 
-def make_epsilon_greedy_policy(estimator, nA):
+def make_epsilon_greedy_policy(estimator, nA, sentence_vec):
     """
     Creates an epsilon-greedy policy based on a given Q-function approximator and epsilon.
     Args:
@@ -195,7 +200,7 @@ def make_epsilon_greedy_policy(estimator, nA):
     """
     def policy_fn(sess, observation, epsilon):
         A = np.ones(nA, dtype=float) * epsilon / nA
-        q_values = estimator.predict(sess, np.expand_dims(observation, 0))[0]
+        q_values = estimator.predict(sess, np.expand_dims(observation, 0), sentence_vec)[0]
         best_action = np.argmax(q_values)
         A[best_action] += (1.0 - epsilon)
         return A
@@ -206,9 +211,9 @@ def deep_q_learning(sess,
                     env,
                     q_estimator,
                     target_estimator,
-                    state_processor,
                     num_episodes,
                     experiment_dir,
+                    sentence_vec,
                     replay_memory_size=500000,
                     replay_memory_init_size=50000,
                     update_target_estimator_every=10000,
@@ -243,6 +248,9 @@ def deep_q_learning(sess,
     Returns:
         An EpisodeStats object with two numpy arrays for episode_lengths and episode_rewards.
     """
+    instructions = sentence_vec
+    for i in range(batch_size - 1):
+        instructions.append(sentence_vec[0])
 
     Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
 
@@ -260,8 +268,6 @@ def deep_q_learning(sess,
 
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
-    if not os.path.exists(monitor_path):
-        os.makedirs(monitor_path)
 
     saver = tf.train.Saver()
     # Load a previous checkpoint if we find one
@@ -278,7 +284,8 @@ def deep_q_learning(sess,
     # The policy we're following
     policy = make_epsilon_greedy_policy(
         q_estimator,
-        len(VALID_ACTIONS))
+        len(VALID_ACTIONS),
+        [instructions[0]])
 
     # Populate the replay memory with initial experience
     print("Populating replay memory...")
@@ -320,7 +327,7 @@ def deep_q_learning(sess,
 
             # Print out which step we're on, useful for debugging.
             print("\rStep {} ({}) @ Episode {}/{}, loss: {}".format(
-                    t, total_t, i_episode + 1, num_episodes, loss), end="")
+                    t, total_t, i_episode + 1, num_episodes, loss))
             sys.stdout.flush()
 
             # Take a step
@@ -344,15 +351,15 @@ def deep_q_learning(sess,
             states_batch, action_batch, reward_batch, next_states_batch, done_batch = map(np.array, zip(*samples))
 
             # Calculate q values and targets (Double DQN)
-            q_values_next = q_estimator.predict(sess, next_states_batch)
+            q_values_next = q_estimator.predict(sess, next_states_batch, instructions)
             best_actions = np.argmax(q_values_next, axis=1)
-            q_values_next_target = target_estimator.predict(sess, next_states_batch)
+            q_values_next_target = target_estimator.predict(sess, next_states_batch, instructions)
             targets_batch = reward_batch + np.invert(done_batch).astype(np.float32) * \
                 discount_factor * q_values_next_target[np.arange(batch_size), best_actions]
 
             # Perform gradient descent update
             states_batch = np.array(states_batch)
-            loss = q_estimator.update(sess, states_batch, action_batch, targets_batch)
+            loss = q_estimator.update(sess, states_batch, action_batch, targets_batch, instructions)
 
             if done:
                 break
@@ -371,13 +378,22 @@ def deep_q_learning(sess,
             episode_lengths=stats.episode_lengths[:i_episode+1],
             episode_rewards=stats.episode_rewards[:i_episode+1])
 
-    return stats
+    #return stats
 
 
 tf.reset_default_graph()
 
+# Experiment #
+# exp 1 params: num_episodes = 1000, replay mem size = initi size = 50k, update_target_estimatory_every = 100, epsilon decay steps = 500,000
+exp_num = 2
+
+sentence_vec = [[1,0,0]]
+
+# Make the environment
+env = environment.GridWorld(sentence_vec)
+
 # Where we save our checkpoints and graphs
-experiment_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
+experiment_dir = os.path.abspath("./experiments/{}".format(exp_num))
 
 # Create a global step variable
 global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -386,8 +402,7 @@ global_step = tf.Variable(0, name='global_step', trainable=False)
 q_estimator = Estimator(scope="q", summaries_dir=experiment_dir)
 target_estimator = Estimator(scope="target_q")
 
-# Make the environment
-env = environment.GridWorld()
+
 
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
@@ -396,13 +411,14 @@ with tf.Session() as sess:
                                     q_estimator=q_estimator,
                                     target_estimator=target_estimator,
                                     experiment_dir=experiment_dir,
+                                    sentence_vec=sentence_vec,
                                     num_episodes=1000,
                                     replay_memory_size=50000,
                                     replay_memory_init_size=50000,
-                                    update_target_estimator_every=100,
+                                    update_target_estimator_every=2000,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
-                                    epsilon_decay_steps=500000,
+                                    epsilon_decay_steps=50000,
                                     discount_factor=0.99,
                                     batch_size=32):
 
