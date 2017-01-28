@@ -61,7 +61,8 @@ class GridWorld():
     	returns: the reward the agent gets for being in 
     	the current state and taking the selected action.
 
-    	:
+    	:returns reward
+        :rtype float
     	"""
     	raise NotImplementedError
 
