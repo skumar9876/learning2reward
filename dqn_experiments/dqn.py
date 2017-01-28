@@ -98,9 +98,9 @@ class Estimator():
         b_fc2 = bias_variable([50])
         h_fc2 = tf.nn.relu(tf.matmul(self.sentence_pl, W_fc2) + b_fc2)
 
-        # Concatenate fc layers for image and language inputs -> should be a 1x200
+        # Concatenate fc layers for image and language inputs -> should be a 1x100
         # vector
-        h_fc_concatenated = tf.concat(1, [h_fc1, h_fc2])
+        h_fc_concatenated = tf.concat_v2([h_fc1, h_fc2], 1)
         #print h_fc_concatenated.get_shape()
 
         # Dropout according to input probability
@@ -187,7 +187,7 @@ def copy_model_parameters(sess, estimator1, estimator2):
     sess.run(update_ops)
 
 
-def make_epsilon_greedy_policy(estimator, nA, sentence_vec):
+def make_epsilon_greedy_policy(estimator, nA):
     """
     Creates an epsilon-greedy policy based on a given Q-function approximator and epsilon.
     Args:
@@ -199,7 +199,7 @@ def make_epsilon_greedy_policy(estimator, nA, sentence_vec):
     """
     def policy_fn(sess, observation, epsilon):
         A = np.ones(nA, dtype=float) * epsilon / nA
-        q_values = estimator.predict(sess, np.expand_dims(observation, 0), sentence_vec)[0]
+        q_values = estimator.predict(sess, np.expand_dims(observation['state'], 0), observation['sentence'])[0]
         best_action = np.argmax(q_values)
         A[best_action] += (1.0 - epsilon)
         return A
@@ -212,7 +212,6 @@ def deep_q_learning(sess,
                     target_estimator,
                     num_episodes,
                     experiment_dir,
-                    sentence_vec,
                     replay_memory_size=500000,
                     replay_memory_init_size=50000,
                     update_target_estimator_every=10000,
@@ -247,11 +246,9 @@ def deep_q_learning(sess,
     Returns:
         An EpisodeStats object with two numpy arrays for episode_lengths and episode_rewards.
     """
-    instructions = sentence_vec
-    for i in range(batch_size - 1):
-        instructions.append(sentence_vec[0])
 
-    Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
+
+    Transition = namedtuple("Transition", ["state", "sentence", "action", "reward", "next_state", "done"])
 
     # The replay memory
     replay_memory = []
@@ -283,19 +280,20 @@ def deep_q_learning(sess,
     # The policy we're following
     policy = make_epsilon_greedy_policy(
         q_estimator,
-        len(VALID_ACTIONS),
-        [instructions[0]])
+        len(VALID_ACTIONS))
 
     # Populate the replay memory with initial experience
     print("Populating replay memory...")
-    state = env.reset()
+    state, sentence_vec = env.reset()
     for i in range(replay_memory_init_size):
-        action_probs = policy(sess, state, epsilons[min(total_t, epsilon_decay_steps-1)])
+        observation = {'state': state, 'sentence': [sentence_vec]}
+
+        action_probs = policy(sess, observation, epsilons[min(total_t, epsilon_decay_steps-1)])
         action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
         next_state, reward, done = env.step(VALID_ACTIONS[action])
-        replay_memory.append(Transition(state, action, reward, next_state, done))
+        replay_memory.append(Transition(state, sentence_vec, action, reward, next_state, done))
         if done:
-            state = env.reset()
+            state, sentence_vec = env.reset()
         else:
             state = next_state
 
@@ -305,7 +303,7 @@ def deep_q_learning(sess,
         saver.save(tf.get_default_session(), checkpoint_path)
 
         # Reset the environment
-        state = env.reset()
+        state, sentence_vec = env.reset()
         loss = None
 
         # One step in the environment
@@ -330,7 +328,9 @@ def deep_q_learning(sess,
             sys.stdout.flush()
 
             # Take a step
-            action_probs = policy(sess, state, epsilon)
+            observation = {'state': state, 'sentence': [sentence_vec]}
+
+            action_probs = policy(sess, observation, epsilon)
             action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
             next_state, reward, done = env.step(VALID_ACTIONS[action])
 
@@ -339,7 +339,7 @@ def deep_q_learning(sess,
                 replay_memory.pop(0)
 
             # Save transition to replay memory
-            replay_memory.append(Transition(state, action, reward, next_state, done))   
+            replay_memory.append(Transition(state, sentence_vec, action, reward, next_state, done))   
 
             # Update statistics
             stats.episode_rewards[i_episode] += reward
@@ -347,18 +347,18 @@ def deep_q_learning(sess,
 
             # Sample a minibatch from the replay memory
             samples = random.sample(replay_memory, batch_size)
-            states_batch, action_batch, reward_batch, next_states_batch, done_batch = map(np.array, zip(*samples))
+            states_batch, sentences_batch, action_batch, reward_batch, next_states_batch, done_batch = map(np.array, zip(*samples))
 
             # Calculate q values and targets (Double DQN)
-            q_values_next = q_estimator.predict(sess, next_states_batch, instructions)
+            q_values_next = q_estimator.predict(sess, next_states_batch, sentences_batch)
             best_actions = np.argmax(q_values_next, axis=1)
-            q_values_next_target = target_estimator.predict(sess, next_states_batch, instructions)
+            q_values_next_target = target_estimator.predict(sess, next_states_batch, sentences_batch)
             targets_batch = reward_batch + np.invert(done_batch).astype(np.float32) * \
                 discount_factor * q_values_next_target[np.arange(batch_size), best_actions]
 
             # Perform gradient descent update
             states_batch = np.array(states_batch)
-            loss = q_estimator.update(sess, states_batch, action_batch, targets_batch, instructions)
+            loss = q_estimator.update(sess, states_batch, action_batch, targets_batch, sentences_batch)
 
             if done:
                 break
@@ -383,13 +383,13 @@ def deep_q_learning(sess,
 tf.reset_default_graph()
 
 # Experiment #
-# exp 1 params: num_episodes = 1000, replay mem size = initi size = 50k, update_target_estimatory_every = 100, epsilon decay steps = 500,000
-exp_num = 2
+# exp 1 params: num_episodes = 1000, replay mem size = initial size = 50k, update_target_estimator_every = 100, epsilon decay steps = 500k
+# exp 2 params: num_episodes = 1000, replay mem size = initial size = 50k, update_target_estimator_every = 20k, epsilon decay steps = 50k
+exp_num = 1
 
-sentence_vec = [[1,0,0]]
 
 # Make the environment
-env = environment.GridWorld(sentence_vec)
+env = environment.GridWorld()
 
 # Where we save our checkpoints and graphs
 experiment_dir = os.path.abspath("./experiments/{}".format(exp_num))
@@ -404,20 +404,19 @@ target_estimator = Estimator(scope="target_q")
 
 
 with tf.Session() as sess:
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
     for t, stats in deep_q_learning(sess,
                                     env,
                                     q_estimator=q_estimator,
                                     target_estimator=target_estimator,
                                     experiment_dir=experiment_dir,
-                                    sentence_vec=sentence_vec,
-                                    num_episodes=1000,
-                                    replay_memory_size=50000,
+                                    num_episodes=10000,
+                                    replay_memory_size=500000,
                                     replay_memory_init_size=50000,
-                                    update_target_estimator_every=2000,
+                                    update_target_estimator_every=10000,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
-                                    epsilon_decay_steps=50000,
+                                    epsilon_decay_steps=500000,
                                     discount_factor=0.99,
                                     batch_size=32):
 

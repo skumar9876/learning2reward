@@ -16,7 +16,7 @@ class GridWorld():
     to navigate in the environment. Functions mimic OpenAI domain functions.
     """
 
-    def __init__(self, sentence):
+    def __init__(self):
         filename = 'map1.txt' # Change map here
         self.original_board = []
 
@@ -32,12 +32,7 @@ class GridWorld():
             self.original_board.append(line)
 
         self.original_board = np.array(self.original_board)
-        self.x = -1
-        self.y = -1
         self.reset()
-        self.sentence = np.array(sentence)
-        goal_map = {0: 20, 1: 30, 2: 40}
-        self.goal = goal_map[np.argwhere(self.sentence)[0][0]]
 
     def reset(self):
         """
@@ -59,7 +54,15 @@ class GridWorld():
 
         self.x = randx
         self.y = randy
-        return self.state
+
+        sentence_map = {0: [1, 0, 0], 1: [0, 1, 0], 2: [0, 0, 1]}
+        rand_sent = random.randint(0, 2)
+        self.sentence = np.array(sentence_map[rand_sent])
+        goal_map = {0: 20, 1: 30, 2: 40}
+        self.goal = goal_map[np.argwhere(self.sentence)[0][0]]
+
+
+        return self.state, self.sentence
 
 
     def step(self, action):
@@ -117,7 +120,7 @@ class GridWorld():
         :returns: whether or not current state is a terminal state
         :rtype: boolean
         """
-        return self.original_board[self.x][self.y] == self.goal
+        return self.original_board[self.y][self.x] == self.goal
 
     def reward(self):
         """
