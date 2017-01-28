@@ -1,4 +1,3 @@
-import gym
 import itertools
 import numpy as np
 import os
