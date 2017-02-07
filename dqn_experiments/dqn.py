@@ -57,8 +57,10 @@ class Estimator():
 
         # Placeholders for our input
         # State input is a 20x20 image
-        self.state_pl = tf.placeholder(shape=[None, 20, 20], dtype=tf.uint8, name="image")
-        state = tf.reshape(self.state_pl, [-1, 400])
+        map_size = 10
+
+        self.state_pl = tf.placeholder(shape=[None, map_size, map_size], dtype=tf.uint8, name="image")
+        state = tf.reshape(self.state_pl, [-1, map_size * map_size])
         # Sentence input is a 4x1 vector
         self.sentence_pl = tf.placeholder(tf.float32, shape=[None, 3], name="sentence")
 
@@ -76,7 +78,7 @@ class Estimator():
         W_conv1 = weight_variable([3, 3, 1, 32])
         b_conv1 = bias_variable([32])
 
-        state_image = tf.reshape(state, [-1, 20, 20, 1])
+        state_image = tf.reshape(state, [-1, map_size, map_size, 1])
         h_conv1 = tf.nn.relu(conv2d(state_image, W_conv1) + b_conv1)
         h_pool1 = h_conv1  # max_pool_2x2(h_conv1) #No max pooling for now
 
@@ -88,9 +90,9 @@ class Estimator():
         h_pool2 = h_conv2  # max_pool_2x2(h_conv2) #No max pooling for now
 
         # Fully connected layer
-        W_fc1 = weight_variable([20 * 20 * 64, 50])
+        W_fc1 = weight_variable([map_size * map_size * 64, 50])
         b_fc1 = bias_variable([50])
-        h_pool2_flat = tf.reshape(h_pool2, [-1, 20 * 20 * 64])
+        h_pool2_flat = tf.reshape(h_pool2, [-1, map_size * map_size * 64])
         h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
 
         # Fully connected layer for the language vector
@@ -383,13 +385,14 @@ def deep_q_learning(sess,
 tf.reset_default_graph()
 
 # Experiment #
-# exp 1 params: num_episodes = 1000, replay mem size = initial size = 50k, update_target_estimator_every = 100, epsilon decay steps = 500k
-# exp 2 params: num_episodes = 1000, replay mem size = initial size = 50k, update_target_estimator_every = 20k, epsilon decay steps = 50k
-exp_num = 1
+# exp 1 params: num_episodes = 10000, replay mem size  = 500k, initial size = 50k, update_target_estimator_every = 1000, epsilon decay steps = 500k
+# exp 2 params: num_episodes = 1000, replay mem size = 50k, initial size = 5k, update_target_estimator_every = 100, epsilon decay steps = 50k
+# exp 3 params: num_episodes = 1000, replay mem size = 50k, initial size = 5k, update_target_estimator_every = 100, epsilon decay steps = 10k
+exp_num = 3
 
 
 # Make the environment
-env = environment.GridWorld()
+env = environment.GridWorld('map1_small.txt')
 
 # Where we save our checkpoints and graphs
 experiment_dir = os.path.abspath("./experiments/{}".format(exp_num))
@@ -410,13 +413,13 @@ with tf.Session() as sess:
                                     q_estimator=q_estimator,
                                     target_estimator=target_estimator,
                                     experiment_dir=experiment_dir,
-                                    num_episodes=10000,
-                                    replay_memory_size=500000,
-                                    replay_memory_init_size=50000,
-                                    update_target_estimator_every=10000,
+                                    num_episodes=1000,
+                                    replay_memory_size=50000,
+                                    replay_memory_init_size=5000,
+                                    update_target_estimator_every=100,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
-                                    epsilon_decay_steps=500000,
+                                    epsilon_decay_steps=10000,
                                     discount_factor=0.99,
                                     batch_size=32):
 

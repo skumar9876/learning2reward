@@ -16,8 +16,8 @@ class GridWorld():
     to navigate in the environment. Functions mimic OpenAI domain functions.
     """
 
-    def __init__(self):
-        filename = 'map1.txt' # Change map here
+    def __init__(self, filename='map1_small.txt'):
+
         self.original_board = []
 
         f = open(filename, 'r')
@@ -45,11 +45,11 @@ class GridWorld():
         randx = random.randint(0, len(self.original_board[0]) - 1)
         randy = random.randint(0, len(self.original_board) - 1)
 
-        while self.original_board[randx][randy] == 60:
+        while self.original_board[randy][randx] == 60:
             randy = random.randint(0, len(self.original_board) - 1)
             randx = random.randint(0, len(self.original_board[0]) - 1)
 
-        self.state = self.original_board
+        self.state = self.original_board.copy()
         self.state[randy][randx] = 10
 
         self.x = randx
@@ -108,6 +108,9 @@ class GridWorld():
 
         self.state[self.y][self.x] = 10
 
+        #print self.goal
+        #print self.original_board[self.y][self.x]
+        #print self.isTerminal()
         return self.state, self.reward(), self.isTerminal()
 
 

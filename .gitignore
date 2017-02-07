@@ -1,3 +1,5 @@
+# Ignore experiment results
+dqn_experiments/experiments/*
 
 # Created by https://www.gitignore.io/api/python,macos,windows
 
