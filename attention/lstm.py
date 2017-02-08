@@ -69,13 +69,16 @@ for i in range(num_steps):
 	
 
 	agent.move(sent)
-	loss += #0 if agent doesn't reach goal here, -1 if agent reaches goal here
+	loss += #call reward function here -> returns 0 if agent doesn't reach goal here, -1 if agent reaches goal here
 
 	att = #function call here that takes in action as input
 	sent = pred_sentence
 
 # How to propogate loss up?
+# This train step needs to be defined earlier somehow...
 train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
+
+
 
 
 #sess.run(tf.global_variables_initializer())
