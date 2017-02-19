@@ -12,7 +12,8 @@ Agent = 10
 
 class World():
 
-    def __init__(self):
+    def __init__(self, fixed=False):
+        self.fixed = fixed
         self.reset()
 
     def reset(self):
@@ -28,12 +29,15 @@ class World():
 
         return self.attention_image, self.sentence
 
+
     def generate_map(self):
         world = []
         colors = [20, 30, 40, 50]
         colors_dict = {20: 0, 30: 1, 40: 2, 50: 3}
         random.shuffle(colors) # Randomly shuffle the colors
         lines = 10
+
+        fixed_num_lines = [3, 2, 3, 2]
 
         for i in xrange(len(colors)):
             color = colors[i]
@@ -43,10 +47,14 @@ class World():
             if i == len(colors) - 1: # This is the last color
                 num_lines = lines 
             else:
-                num_lines = random.randint(1, 4)
-                while lines - num_lines < 0:
+                if self.fixed == False:
                     num_lines = random.randint(1, 4)
-                lines -= num_lines
+                    while lines - num_lines < 0:
+                        num_lines = random.randint(1, 4)
+                    lines -= num_lines
+                else: 
+                    num_lines = fixed_num_lines[i]
+                    lines -= num_lines
 
             for y in range(num_lines):
                 for x in range(10):
@@ -127,6 +135,18 @@ class World():
         self.num_steps += 1
 
         done = self.isTerminal()
+
+        print sentence
+        print ""
+        print action
+        print ""
+        print self.attention_image
+        print ""
+        print self.world
+        print ""
+        print ""
+        print ""
+
 
         return self.attention_image, self.sentence, done
 

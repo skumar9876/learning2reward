@@ -289,22 +289,23 @@ tf.reset_default_graph()
 global_step = tf.Variable(0, name="global_step", trainable=False)
 policy_estimator = PolicyEstimator()
 
-env = World()
+env = World(fixed=True)
 
+num_episodes = 1
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     # Note, due to randomness in the policy the number of episodes you need to learn a good
     # policy may vary. ~2000-5000 seemed to work well for me.
-    stats = reinforce(env, policy_estimator, 2000)
+    stats = reinforce(env, policy_estimator, num_episodes)
 
 import matplotlib.pyplot as plt
 
 fig1 = plt.figure()
-plt.plot(stats.episode_lengths)
-fig1.savefig('episode_lengths.png', dpi=fig1.dpi)
+plt.scatter(np.arange(num_episodes), stats.episode_lengths)
+fig1.savefig('episode_lengths_fixed_map.png', dpi=fig1.dpi)
 
 fig2 = plt.figure()
-plt.plot(stats.episode_rewards)
-fig2.savefig('episode_rewards.png', dpi=fig2.dpi)
+plt.scatter(np.arange(num_episodes), stats.episode_rewards)
+fig2.savefig('episode_rewards_fixed_map.png', dpi=fig2.dpi)
 
 
