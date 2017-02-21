@@ -9,22 +9,14 @@ import collections
 from environment import World
 import plotting
 
-
-# Network definition functions
-def weight_variable(shape):
-	initial = tf.truncated_normal(shape, stddev=0.1)
-	return tf.Variable(initial)
-
-def bias_variable(shape):
-	initial = tf.constant(0.1, shape=shape)
-	return tf.Variable(initial)
-
+from utils import *
 
 class PolicyEstimator():
     """
     Policy Function approximator. 
     """
     
+    #learning_rate = 0.01
     def __init__(self, learning_rate=0.01, scope="policy_estimator"):
         with tf.variable_scope(scope):
             ###################
@@ -73,21 +65,23 @@ class PolicyEstimator():
             #     Network    #
             ##################
 
+            hidden_layer_size = 20
+
             # Hidden layer for the image input
-            self.W_fc1 = weight_variable([5*5, 100])
-            self.b_fc1 = bias_variable([100])
-            self.h_fc1 = tf.matmul(self.image_flat, self.W_fc1) + self.b_fc1
+            self.W_fc1 = weight_variable([5*5, hidden_layer_size])
+            self.b_fc1 = bias_variable([hidden_layer_size])
+            self.h_fc1 = tf.tanh(tf.matmul(self.image_flat, self.W_fc1) + self.b_fc1) #Added tanh activation
 
             # Concatenate the sentence
             self.h_fc1_concatenated = tf.concat_v2([self.h_fc1, self.sentence], 1)
 
             # Second hidden layer
-            self.W_fc2 = weight_variable([100 + sentence_size, 100])
-            self.b_fc2 = bias_variable([100])
+            self.W_fc2 = weight_variable([hidden_layer_size + sentence_size, hidden_layer_size])
+            self.b_fc2 = bias_variable([hidden_layer_size])
 
-            self.h_fc2 = tf.matmul(self.h_fc1_concatenated, self.W_fc2) + self.b_fc2
+            self.h_fc2 = tf.tanh(tf.matmul(self.h_fc1_concatenated, self.W_fc2) + self.b_fc2) #Added tanh activation
 
-            self.h_fc2_reshaped = tf.reshape(self.h_fc2, [1,-1,100])
+            self.h_fc2_reshaped = tf.reshape(self.h_fc2, [1,-1,hidden_layer_size])
 
 
             self.step_size = tf.placeholder(tf.int32)
@@ -112,16 +106,6 @@ class PolicyEstimator():
 
 
             self.action_probs = tf.squeeze(tf.nn.softmax(self.action_vals))
-
-
-            #self.chosen_actions_flattened = tf.range(0, self.action_probs.get_shape()[0]) * self.action_probs.get_shape()[1] + self.chosen_actions
-
-
-            #self.picked_action_prob = tf.gather(tf.reshape(self.action_probs, [-1]),  # flatten input
-            #  self.chosen_actions_flattened)  # use flattened indices
-
-
-
             self.picked_action_prob = tf.gather_nd(self.action_probs, self.chosen_action)
 
             self.room_probs = tf.squeeze(tf.nn.softmax(self.room_vals))
@@ -130,7 +114,14 @@ class PolicyEstimator():
             # Loss and train op
             self.loss = - (tf.reduce_sum(tf.log(self.picked_action_prob)) + tf.reduce_sum(tf.log(self.picked_room_prob))) * self.target
 
+            self.action_entropy = -tf.reduce_mean(tf.reduce_sum(self.action_probs * tf.log(self.action_probs), 1), 0)
+            self.room_entropy = -tf.reduce_mean(tf.reduce_sum(self.room_probs * tf.log(self.room_probs), 1), 0)
+
+            action_tensor = tf.log(self.picked_action_prob)
+            room_tensor = tf.log(self.picked_room_prob)
+
             self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+            #self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
             self.train_op = self.optimizer.minimize(
                 self.loss, global_step=tf.contrib.framework.get_global_step())
 
@@ -153,7 +144,35 @@ class PolicyEstimator():
         feed_dict = { self.image: input_image, self.sentence: input_sentence, self.target: target, self.chosen_action: chosen_action, self.chosen_room: chosen_room, 
         self.lstm_state_input: lstm_state_input, self.step_size: step_size}
         _, loss = sess.run([self.train_op, self.loss], feed_dict)
-        return loss
+
+        lstm_outputs = self.lstm_outputs.eval(feed_dict)
+        action_vals = self.action_vals.eval(feed_dict)
+        action_probs = self.action_probs.eval(feed_dict)
+        chosen_action = self.chosen_action.eval(feed_dict)
+        picked_action_prob = self.picked_action_prob.eval(feed_dict)
+
+        picked_room_prob = self.picked_room_prob.eval(feed_dict)
+        loss = self.loss.eval(feed_dict)
+        action_entropy = self.action_entropy.eval(feed_dict)
+        room_entropy = self.room_entropy.eval(feed_dict)
+
+        '''
+        print lstm_outputs
+        print ""
+        print action_vals
+        print ""
+        print action_probs
+        print len(action_probs)
+        print ""
+        print chosen_action
+        print len(chosen_action)
+        print ""
+        print picked_action_prob
+        print len(picked_action_prob)
+        print ""
+        '''
+        
+        return loss, action_entropy, room_entropy
 
 
 
@@ -176,7 +195,11 @@ def reinforce(env, estimator_policy, num_episodes):
     # Keeps track of useful statistics
     stats = plotting.EpisodeStats(
         episode_lengths=np.zeros(num_episodes),
-        episode_rewards=np.zeros(num_episodes))    
+        episode_rewards=np.zeros(num_episodes), 
+        loss_arr=np.zeros(num_episodes), 
+        loss_entropy_arr=np.zeros(num_episodes), 
+        action_entropy_arr=np.zeros(num_episodes), 
+        room_entropy_arr=np.zeros(num_episodes)) 
     
     Transition = collections.namedtuple("Transition", ["image", "sentence", "move_action", "room_selection", "next_image", "next_sentence", "done"])
     
@@ -198,7 +221,9 @@ def reinforce(env, estimator_policy, num_episodes):
 
         # Reset the environment
         image, target_sentence = env.reset()
+        print ""
         print "Episode: " + str(i_episode)
+        print "target sentence: " + str(target_sentence)
         
         # One step in the environment
         for t in itertools.count():
@@ -210,7 +235,7 @@ def reinforce(env, estimator_policy, num_episodes):
             # Take a step
             action_probs, room_probs, lstm_state = estimator_policy.predict(image, target_sentence, lstm_state)
 
-            if i_episode == num_episodes - 1:
+            if i_episode == num_episodes - 1 or i_episode == num_episodes - 2 or i_episode == 0:
                 print action_probs
                 print room_probs
 
@@ -271,14 +296,16 @@ def reinforce(env, estimator_policy, num_episodes):
         chosen_actions = np.array(chosen_actions)
         chosen_actions = chosen_actions.reshape(len(chosen_actions), 2)
 
-        #print chosen_actions
-
         lstm_initial_state = np.zeros([1, 18])
 
         target = env.episode_reward()
         stats.episode_rewards[i_episode] = target
 
-        estimator_policy.update(images, sentences, target, chosen_actions, chosen_rooms, lstm_initial_state, len(episode))
+        loss, action_entropy, room_entropy = estimator_policy.update(images, sentences, target, chosen_actions, chosen_rooms, lstm_initial_state, len(episode))
+
+        stats.loss_arr[i_episode] = loss
+        stats.action_entropy_arr[i_episode] = action_entropy
+        stats.room_entropy_arr[i_episode] = room_entropy
     
     return stats
 
@@ -289,9 +316,15 @@ tf.reset_default_graph()
 global_step = tf.Variable(0, name="global_step", trainable=False)
 policy_estimator = PolicyEstimator()
 
-env = World(fixed=True)
+fixed=True
+if fixed == True:
+    fixed_str = 'fixed'
+else:
+    fixed_str = 'not_fixed'
 
-num_episodes = 1
+env = World(fixed=fixed)
+
+num_episodes = 1000
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     # Note, due to randomness in the policy the number of episodes you need to learn a good
@@ -302,10 +335,20 @@ import matplotlib.pyplot as plt
 
 fig1 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.episode_lengths)
-fig1.savefig('episode_lengths_fixed_map.png', dpi=fig1.dpi)
+fig1.savefig('attention/' + fixed_str + '/episode_lengths.png', dpi=fig1.dpi)
 
 fig2 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.episode_rewards)
-fig2.savefig('episode_rewards_fixed_map.png', dpi=fig2.dpi)
+fig2.savefig('attention/' + fixed_str + '/episode_rewards.png', dpi=fig2.dpi)
 
+fig3 = plt.figure()
+plt.scatter(np.arange(num_episodes), stats.loss_arr)
+fig3.savefig('attention/' + fixed_str + '/loss.png', dpi=fig3.dpi)
 
+fig4 = plt.figure()
+plt.scatter(np.arange(num_episodes), stats.action_entropy_arr)
+fig4.savefig('attention/' + fixed_str + '/action_entropy.png', dpi=fig4.dpi)
+
+fig5 = plt.figure()
+plt.scatter(np.arange(num_episodes), stats.room_entropy_arr)
+fig5.savefig('attention/' + fixed_str + '/room_entropy.png', dpi=fig5.dpi)
