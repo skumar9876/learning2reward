@@ -58,7 +58,7 @@ class PolicyEstimator():
             self.sentence = tf.placeholder(tf.float32, [None, sentence_size], name='sentence')
 
             # LSTM 
-            self.lstm_size = 9
+            self.lstm_size = 10
 
             self.lstm_unit = tf.nn.rnn_cell.BasicLSTMCell(self.lstm_size, state_is_tuple=False)
 
@@ -124,10 +124,10 @@ class PolicyEstimator():
 
             # Second hidden layer
             # self.W_fc2 = weight_variable([hidden_layer_size + sentence_size, hidden_layer_size])
-            self.W_fc2 = weight_variable([image_hidden_layer_size + sentence_hidden_layer_size, output_hidden_layer_size])
+            self.W_fc2 = weight_variable([image_hidden_layer_size, output_hidden_layer_size])
             self.b_fc2 = bias_variable([output_hidden_layer_size])
 
-            self.h_fc2 = (tf.matmul(self.h_fc1_concatenated, self.W_fc2) + self.b_fc2) #Added tanh activation
+            self.h_fc2 = (tf.matmul(self.h_fc1, self.W_fc2) + self.b_fc2) #Added tanh activation
 
             self.h_fc2_reshaped = tf.reshape(self.h_fc2, [1,-1, output_hidden_layer_size])
 
@@ -146,10 +146,10 @@ class PolicyEstimator():
                                                             time_major = False,
                                                             scope = scope)
 
-            self.lstm_outputs = tf.reshape(self.lstm_outputs, [-1,9])
+            self.lstm_outputs = tf.reshape(self.lstm_outputs, [-1,10])
 
             self.action_vals = tf.slice(self.lstm_outputs, [0, 0], [self.step_size, 5])
-            self.room_vals = tf.slice(self.lstm_outputs, [0, 5], [self.step_size, 4])
+            self.room_vals = tf.slice(self.lstm_outputs, [0, 5], [self.step_size, 5])
 
 
             self.action_probs = tf.squeeze(tf.nn.softmax(self.action_vals))
@@ -230,7 +230,7 @@ class ValueEstimator():
     """
     
     #learning_rate = 0.01
-    def __init__(self, learning_rate=0.001, scope="policy_estimator"):
+    def __init__(self, learning_rate=0.01, scope="policy_estimator"):
         with tf.variable_scope(scope):
             ###################
             # State Variables #
@@ -359,7 +359,7 @@ def reinforce(env, estimator_policy, num_episodes, estimator_value=None):
         baselines = []
 
         # Initial state of the LSTM memory.
-        initial_state = lstm_state = np.zeros([1, 18])
+        initial_state = lstm_state = np.zeros([1, 20])
 
 
         # Reset the environment
@@ -399,8 +399,11 @@ def reinforce(env, estimator_policy, num_episodes, estimator_value=None):
                 baselines.append(float(total_reward) / total_time)
 
             if i_episode >= num_episodes - 5 or i_episode == 0:
+                print "action probs:"
                 print action_probs
+                print "room probs:"
                 print room_probs
+                print ""
             
             # Keep track of the transition
             episode.append(Transition(
@@ -449,7 +452,7 @@ def reinforce(env, estimator_policy, num_episodes, estimator_value=None):
         chosen_actions = np.array(chosen_actions)
         chosen_actions = chosen_actions.reshape(len(chosen_actions), 2)
 
-        lstm_initial_state = np.zeros([1, 18])
+        lstm_initial_state = np.zeros([1, 20])
 
         stats.episode_rewards[i_episode] = env.episode_reward()
 
@@ -489,7 +492,7 @@ global_step = tf.Variable(0, name="global_step", trainable=False)
 policy_estimator = PolicyEstimator()
 estimator_value = ValueEstimator()
 
-fixed=False
+fixed=True
 if fixed == True:
     fixed_str = 'fixed'
 else:
@@ -508,20 +511,20 @@ import matplotlib.pyplot as plt
 
 fig1 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.episode_lengths)
-fig1.savefig('attention/' + fixed_str + '/episode_lengths.png', dpi=fig1.dpi)
+fig1.savefig('attention2/' + fixed_str + '/episode_lengths.png', dpi=fig1.dpi)
 
 fig2 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.episode_rewards)
-fig2.savefig('attention/' + fixed_str + '/episode_rewards.png', dpi=fig2.dpi)
+fig2.savefig('attention2/' + fixed_str + '/episode_rewards.png', dpi=fig2.dpi)
 
 fig3 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.loss_arr)
-fig3.savefig('attention/' + fixed_str + '/loss.png', dpi=fig3.dpi)
+fig3.savefig('attention2/' + fixed_str + '/loss.png', dpi=fig3.dpi)
 
 fig4 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.action_entropy_arr)
-fig4.savefig('attention/' + fixed_str + '/action_entropy.png', dpi=fig4.dpi)
+fig4.savefig('attention2/' + fixed_str + '/action_entropy.png', dpi=fig4.dpi)
 
 fig5 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.room_entropy_arr)
-fig5.savefig('attention/' + fixed_str + '/room_entropy.png', dpi=fig5.dpi)
+fig5.savefig('attention2/' + fixed_str + '/room_entropy.png', dpi=fig5.dpi)

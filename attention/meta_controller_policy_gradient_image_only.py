@@ -44,7 +44,7 @@ class PolicyEstimator():
     Policy Function approximator. 
     """
     
-    def __init__(self, learning_rate=0.0001, scope="policy_estimator"):
+    def __init__(self, learning_rate=0.00001, scope="policy_estimator"):
         with tf.variable_scope(scope):
             ###################
             # State Variables #
@@ -91,30 +91,21 @@ class PolicyEstimator():
             self.b_conv2 = bias_variable([64])
             self.h_conv2 = tf.nn.relu(conv2d(self.h_pool1, self.W_conv2) + self.b_conv2)
 
-            #self.h_pool2 = max_pool_2x2(self.h_conv2)
+            self.h_pool2 = max_pool_2x2(self.h_conv2)
 
             #print self.h_pool2.get_shape()
 
-            self.h_pool2_reshaped = tf.reshape(self.h_conv2, [-1, 100*64])
+            self.h_pool2_reshaped = tf.reshape(self.h_pool2, [-1, 25*64])
 
 
-            image_hidden_layer_size = 100*64
-            sentence_hidden_layer_size = 64*25
-            
-
-            # Sentence hidden layer
-            self.W_fc_sent = weight_variable([sentence_size, sentence_hidden_layer_size])
-            self.b_fc_sent = bias_variable([sentence_hidden_layer_size])
-            self.h_fc_sent = tf.matmul(self.sentence, self.W_fc_sent) + self.b_fc_sent
-
-            self.h_fc_concatenated = tf.concat_v2([self.h_pool2_reshaped, self.h_fc_sent], 1)
+            image_hidden_layer_size = 25*64
 
             # Second hidden layer
-            self.W_fc2 = weight_variable([sentence_hidden_layer_size + image_hidden_layer_size, 4])
+            self.W_fc2 = weight_variable([image_hidden_layer_size, 4])
             #self.W_fc2 = weight_variable([sentence_hidden_layer_size, 4])
             self.b_fc2 = bias_variable([4])
 
-            self.h_fc2 = (tf.matmul(self.h_fc_concatenated, self.W_fc2) + self.b_fc2) #ADDED TANH HERE!!!
+            self.h_fc2 = (tf.matmul(self.h_pool2_reshaped, self.W_fc2) + self.b_fc2) #ADDED TANH HERE!!!
             #self.h_fc2 = (tf.matmul(self.h_fc_sent, self.W_fc2) + self.b_fc2) 
  
             self.room_vals = tf.reshape(self.h_fc2, [-1, 4])
@@ -212,23 +203,12 @@ class ValueEstimator():
 
 
             image_hidden_layer_size = 25*64
-            sentence_hidden_layer_size = 64*25
-            
-
-            # Sentence hidden layer
-            self.W_fc_sent = weight_variable([sentence_size, sentence_hidden_layer_size])
-            self.b_fc_sent = bias_variable([sentence_hidden_layer_size])
-            self.h_fc_sent = tf.matmul(self.sentence, self.W_fc_sent) + self.b_fc_sent
-
-            self.h_fc_concatenated = tf.concat_v2([self.h_pool2_reshaped, self.h_fc_sent], 1)
 
             # Second hidden layer
-            self.W_fc2 = weight_variable([sentence_hidden_layer_size + image_hidden_layer_size, 1])
+            self.W_fc2 = weight_variable([image_hidden_layer_size, 1])
             self.b_fc2 = bias_variable([1])
 
-            self.value_estimate = tf.matmul(self.h_fc_concatenated, self.W_fc2) + self.b_fc2
- 
- 
+            self.value_estimate = tf.matmul(self.h_pool2_reshaped, self.W_fc2) + self.b_fc2
 
             self.loss = tf.reduce_sum(tf.squared_difference(self.value_estimate, self.target))
 
@@ -442,7 +422,7 @@ else:
 
 env = World(fixed=fixed)
 
-num_episodes = 5000
+num_episodes = 500
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     # Note, due to randomness in the policy the number of episodes you need to learn a good
@@ -453,17 +433,17 @@ import matplotlib.pyplot as plt
 
 fig1 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.episode_lengths)
-fig1.savefig('no_attention/' + fixed_str + '/episode_lengths.png', dpi=fig1.dpi)
+fig1.savefig('no_attention2/' + fixed_str + '/episode_lengths.png', dpi=fig1.dpi)
 
 fig2 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.episode_rewards)
-fig2.savefig('no_attention/' + fixed_str + '/episode_rewards.png', dpi=fig2.dpi)
+fig2.savefig('no_attention2/' + fixed_str + '/episode_rewards.png', dpi=fig2.dpi)
 
 fig3 = plt.figure()
 plt.scatter(np.arange(num_episodes), stats.loss_arr)
-fig3.savefig('no_attention/' + fixed_str + '/loss.png', dpi=fig3.dpi)
+fig3.savefig('no_attention2/' + fixed_str + '/loss.png', dpi=fig3.dpi)
 
 fig4 = plt.figure()
 #print stats.loss_entropy_arr
 plt.scatter(np.arange(num_episodes), stats.loss_entropy_arr)
-fig4.savefig('no_attention/' + fixed_str + '/room_entropy.png', dpi=fig4.dpi)
+fig4.savefig('no_attention2/' + fixed_str + '/room_entropy.png', dpi=fig4.dpi)

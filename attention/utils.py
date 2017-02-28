@@ -1,4 +1,5 @@
 import tensorflow as tf
+import math
 
 '''
 Network definition functions.
@@ -19,7 +20,12 @@ def weight_variable(shape):
 
 
 def bias_variable(shape):
-	initial = tf.constant(0.0, shape=shape)
+	num_nodes = 1
+
+	for i in xrange(len(shape)):
+		num_nodes *= shape[i]
+
+	initial = tf.constant(math.sqrt(1/float(num_nodes)), shape=shape)
 
     #initial = tf.constant(0.001, shape=shape)
 	return tf.Variable(initial)
