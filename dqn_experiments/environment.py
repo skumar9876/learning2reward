@@ -17,6 +17,7 @@ class GridWorld():
     """
 
     def __init__(self, filename='map1_small.txt'):
+        self.MAX_STEPS = 200
 
         self.original_board = []
 
@@ -41,9 +42,13 @@ class GridWorld():
         :returns state
         :rtype numpy array
         """
+        self.num_steps = 0
 
-        randx = random.randint(0, len(self.original_board[0]) - 1)
-        randy = random.randint(0, len(self.original_board) - 1)
+        #randx = random.randint(0, len(self.original_board[0]) - 1)
+        #randy = random.randint(0, len(self.original_board) - 1)
+        #CHANGED TO BE FIXED
+        randx = 0
+        randy = 0
 
         while self.original_board[randy][randx] == 60:
             randy = random.randint(0, len(self.original_board) - 1)
@@ -56,7 +61,10 @@ class GridWorld():
         self.y = randy
 
         sentence_map = {0: [1, 0, 0], 1: [0, 1, 0], 2: [0, 0, 1]}
-        rand_sent = random.randint(0, 2)
+        #rand_sent = random.randint(0, 2)
+        #CHANGED TO BE FIXED
+        rand_sent = 2
+
         self.sentence = np.array(sentence_map[rand_sent])
         goal_map = {0: 20, 1: 30, 2: 40}
         self.goal = goal_map[np.argwhere(self.sentence)[0][0]]
@@ -86,6 +94,8 @@ class GridWorld():
         :returns: whether or not episode is done
         :rtype: boolean
         """
+        self.num_steps += 1
+
         new_x = self.x
         new_y = self.y
 
@@ -123,7 +133,7 @@ class GridWorld():
         :returns: whether or not current state is a terminal state
         :rtype: boolean
         """
-        return self.original_board[self.y][self.x] == self.goal
+        return self.original_board[self.y][self.x] == self.goal or self.num_steps > self.MAX_STEPS
 
     def reward(self):
         """
@@ -134,7 +144,7 @@ class GridWorld():
         :rtype float
         """
 
-        if self.isTerminal():
+        if self.isTerminal() and self.original_board[self.y][self.x] == self.goal:
             return 1
         else:
             return -.01
